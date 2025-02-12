@@ -19,6 +19,9 @@ RUN GOOS=linux GOARCH=amd64 go build -o firmguardpl
 # Stage 2: Create a minimal runtime container
 FROM alpine:latest
 
+# Install 7-Zip in the final runtime container
+RUN apk add --no-cache p7zip
+
 # Set working directory
 WORKDIR /app
 
