@@ -22,7 +22,7 @@ The service provides a REST API endpoint to check whether a given NIP and bank a
 #### Request:
 
 ```sh
-GET /verify?nip=<NIP>&account=<BANK_ACCOUNT>
+GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 ```
 
 #### Response Examples:
@@ -30,22 +30,29 @@ GET /verify?nip=<NIP>&account=<BANK_ACCOUNT>
 **1. Active taxpayer:**
 
 ```json
-{ "response": "OK", "status": "ACTIVE" }
+{ "response": "OK", "status": "ACTIVE", "bank": "MATCHED", "date": "20250101" }
 ```
 
 **2. Exempt taxpayer:**
 
 ```json
-{ "response": "OK", "status": "EXEMPT" }
+{ "response": "OK", "status": "EXEMPT", "bank": "MATCHED", "date": "20250101" }
 ```
 
-**3. Not found in registry:**
+**4. Taxpayer without bank:**
 
 ```json
-{ "response": "OK", "status": "NOTFOUND" }
+{ "response": "OK", "status": "ACTIVE or EXEMPT", "bank": "NA", "date": "20250101" }
 ```
 
-**4. Error response:**
+
+**5. Not found in registry:**
+
+```json
+{ "response": "OK", "status": "NOT_FOUND", "bank": "NOT_FOUND", "date": "20250101" }
+```
+
+**6. Error response:**
 
 ```json
 { "response": "ERROR", "message": "Invalid parameters" }
@@ -55,7 +62,7 @@ GET /verify?nip=<NIP>&account=<BANK_ACCOUNT>
 
 ### **Prerequisites**
 
-- Go 1.20+
+- Go 1.23+
 - `p7zip-full` (for extracting `.7z` files)
 - Docker (optional, for containerized deployment)
 
