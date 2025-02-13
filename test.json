@@ -1,0 +1,23 @@
+{
+    "naglowek": {
+        "dataGenerowaniaDanych": "20191018",
+        "liczbaTransformacji": "5000",
+        "schemat": "RRRRMMDDNNNNNNNNNNBBBBBBBBBBBBBBBBBBBBBBBBBB lub RRRRMMDDNNNNNNNNNN, gdzie R to cyfra roku, M – miesiąca, D - dnia daty generowania pliku, N to cyfra NIPu, a B to cyfra rachunku bankowego"
+    },
+    "skrotyPodatnikowCzynnych": [
+        "d3dfed802034d198b484c9f19e43c1b7540c3a7808503d01a5ccedbb169012bee6a77979ed46b27f5de2bee0d22eb7c7ca9522dfa92e465999e68e9906e01425"
+    ],
+    "skrotyPodatnikowZwolnionych": [
+        "f8b915776eab735fdd10266b2e66068447904852b82c30eeb6de30703a087eb17ea4c4a37630494607194ddb9354c1211bd984fb5f4d9cff95f5a24ed52065e7"
+    ],
+    "maski": [
+        "XX72123370XXXXXXXYYYXXXXXX",
+        "XX72123370YYXXXXXXXXXXXXXX",
+        "XX72123370YYYXXXXXXXXXXXXX",
+        "XX72123370YYYYXXXXXXXXXXXX",
+        "XX72123370YYYYYXXXXXXXXXXX",
+        "XX72123370YYYYYYXXXXXXXXXX",
+        "XX72123370YYYYYYYYYXXXXXXX",
+        "XX72123370YYYYYYYYYYXXXXXX"
+    ]
+}

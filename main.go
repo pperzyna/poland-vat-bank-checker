@@ -4,226 +4,293 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
-	"regexp"
+	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cavaliergopher/grab/v3"
 )
 
 const (
-	dataURL       = "https://plikplaski.mf.gov.pl/pliki//%s.7z"
-	filePath      = "data.7z"
-	extractPath   = "data/"
-	activeFile    = "data/active_hashes.txt"
-	exemptFile    = "data/exempt_hashes.txt"
-	maskFilePath  = "data/maski.txt"
-	iterations    = 5000
+	dataURL       = "https://plikplaski.mf.gov.pl/pliki/{DATE}.7z"
 	serverAddress = ":8080"
 )
 
 var (
+	dataDate     string = "20250101"
+	iterations   int    = 5000
 	activeHashes map[string]bool
 	exemptHashes map[string]bool
 	masks        []string
 	mu           sync.RWMutex
 )
 
-// JSON response structure
+// JSON Structure
+type DataStructure struct {
+	Header struct {
+		DataDate       string `json:"dataGenerowaniaDanych"`
+		TransformCount string `json:"liczbaTransformacji"`
+	} `json:"naglowek"`
+	ActiveHashes []string `json:"skrotyPodatnikowCzynnych"`
+	ExemptHashes []string `json:"skrotyPodatnikowZwolnionych"`
+	Masks        []string `json:"maski"`
+}
+
+// JSON Response Structure
 type Response struct {
 	Response string `json:"response"`
 	Status   string `json:"status,omitempty"`
+	Bank     string `json:"bank,omitempty"`
+	Date     string `json:"date,omitempty"`
 	Message  string `json:"message,omitempty"`
 }
 
-// Pobiera plik z Ministerstwa Finansów
-func downloadFile() error {
+// 📌 Download the latest VAT file
+func downloadFile() (string, error) {
 	today := time.Now().Format("20060102")
-	url := fmt.Sprintf(dataURL, today)
+	url := strings.ReplaceAll(dataURL, "{DATE}", today)
+	fileName := today + ".7z"
 
-	resp, err := grab.Get(filePath, url)
+	log.Printf("[INFO] Downloading: %s", url)
+	resp, err := grab.Get(fileName, url)
 	if err != nil {
-		return fmt.Errorf("błąd pobierania pliku: %v", err)
+		log.Printf("[ERROR] Download failed: %v", err)
+		return "", err
 	}
-	fmt.Println("Pobrano plik:", resp.Filename)
-	return nil
+	log.Printf("[INFO] Downloaded: %s", resp.Filename)
+	return fileName, nil
 }
 
-// Rozpakowuje plik .7z za pomocą 7-Zip
-func extractFile() error {
-	fmt.Println("Rozpakowywanie pliku...")
-	cmd := exec.Command("7z", "x", filePath, "-o"+extractPath, "-y")
+// 📌 Extract the JSON file from the `.7z` archive
+func extractFile(file string) (string, error) {
+	log.Printf("[INFO] Extracting JSON file from %s", file)
+
+	cmd := exec.Command("7z", "x", file, "-y")
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("błąd rozpakowywania: %v", err)
+		log.Printf("[ERROR] Extraction failed: %v", err)
+		return "", err
 	}
-	fmt.Println("Plik rozpakowany.")
-	return nil
+
+	jsonPath := strings.Replace(file, ".7z", ".json", 1)
+	if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
+		log.Printf("[ERROR] Extracted JSON file not found: %s", jsonPath)
+		return "", err
+	}
+
+	log.Printf("[INFO] Extracted JSON file: %s", jsonPath)
+	return jsonPath, nil
 }
 
-// Wczytuje dane z pliku do mapy
-func loadHashes(filePath string) (map[string]bool, error) {
-	fmt.Println("Ładowanie hashy z pliku:", filePath)
-	data, err := ioutil.ReadFile(filePath)
+// 📌 Load and parse JSON file
+func loadData(jsonPath string) error {
+	log.Printf("[INFO] Loading data from JSON: %s", jsonPath)
+
+	data, err := os.ReadFile(jsonPath)
 	if err != nil {
-		return nil, fmt.Errorf("błąd odczytu pliku hashy: %v", err)
+		log.Printf("[ERROR] Reading JSON file failed: %v", err)
+		return err
 	}
 
-	hashes := make(map[string]bool)
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		if line != "" {
-			hashes[line] = true
-		}
-	}
-	fmt.Println("Załadowano hashy:", len(hashes))
-	return hashes, nil
-}
-
-// Wczytuje maski rachunków wirtualnych
-func loadMasks() ([]string, error) {
-	fmt.Println("Ładowanie masek rachunków...")
-	data, err := ioutil.ReadFile(maskFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("błąd odczytu pliku masek: %v", err)
+	var structure DataStructure
+	if err := json.Unmarshal(data, &structure); err != nil {
+		log.Printf("[ERROR] Parsing JSON failed: %v", err)
+		return err
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
-	masks := strings.Split(strings.TrimSpace(string(data)), "\n")
 
-	fmt.Println("Załadowano masek:", len(masks))
-	return masks, nil
+	dataDate = structure.Header.DataDate
+	if parsedIterations, err := strconv.Atoi(structure.Header.TransformCount); err == nil && parsedIterations > 0 {
+		iterations = parsedIterations
+	} else {
+		log.Printf("[WARNING] Unable to parse TransformCount, using default (%d)", iterations)
+	}
+
+	// Store data in memory
+	activeHashes = make(map[string]bool, len(structure.ActiveHashes))
+	for _, hash := range structure.ActiveHashes {
+		activeHashes[hash] = true
+	}
+
+	exemptHashes = make(map[string]bool, len(structure.ExemptHashes))
+	for _, hash := range structure.ExemptHashes {
+		exemptHashes[hash] = true
+	}
+
+	masks = structure.Masks
+
+	log.Printf("[INFO] Loaded %d active hashes, %d exempt hashes, %d masks. Data date: %s, Iterations: %d",
+		len(activeHashes), len(exemptHashes), len(masks), dataDate, iterations)
+
+	return nil
 }
 
-// Generuje SHA-512
+// 📌 Generate SHA-512 Hash
 func calculateHash(input string) string {
-	hash := sha512.Sum512([]byte(input))
-	for i := 1; i < iterations; i++ {
-		hash = sha512.Sum512(hash[:])
+	hash := []byte(input)
+
+	for i := 0; i < iterations; i++ {
+		hashSum := sha512.Sum512(hash)
+		hash = []byte(strings.ToLower(hex.EncodeToString(hashSum[:])))
 	}
-	return hex.EncodeToString(hash[:])
+
+	return string(hash)
 }
 
-// Tworzy warianty rachunku na podstawie masek
-func generateMaskedAccounts(accountNumber string) []string {
-	mu.RLock()
-	defer mu.RUnlock()
+// 📌 Apply a mask to an account number
+func applyMask(bank string, mask string) string {
+	maskedResult := []rune(mask)
+	accountDigits := []rune(bank)
 
-	var maskedAccounts []string
-	for _, mask := range masks {
-		re := regexp.MustCompile("[XY]+")
-		masked := re.ReplaceAllStringFunc(mask, func(s string) string {
-			if strings.Contains(s, "Y") {
-				start := strings.Index(mask, "Y")
-				return accountNumber[start : start+len(s)]
-			}
-			return strings.Repeat("X", len(s))
-		})
-		maskedAccounts = append(maskedAccounts, masked)
+	for i, char := range maskedResult {
+		if char == 'Y' {
+			// Replace 'Y' with the corresponding digit from the account number			
+			maskedResult[i] = accountDigits[i]
+		} else if char == 'X' {
+			// Keep 'X' as it represents a placeholder
+			maskedResult[i] = 'X'
+		}
 	}
-	return maskedAccounts
+
+	return string(maskedResult)
 }
 
-// Obsługuje endpoint /verify
+// 📌 Handle /verify API endpoint
 func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	nip := query.Get("nip")
-	accountNumber := query.Get("account")
+	bank := query.Get("bank")
 
 	if nip == "" {
-		json.NewEncoder(w).Encode(Response{Response: "ERROR", Message: "Brak wymaganych parametrów"})
+		json.NewEncoder(w).Encode(Response{Response: "ERROR", Message: "Missing required parameters"})
 		return
 	}
-
-	hashInput := nip
-	if accountNumber != "" {
-		hashInput += accountNumber
-	}
-
-	hash := calculateHash(hashInput)
 
 	mu.RLock()
-	defer mu.RUnlock()
+	currentDataDate := dataDate
+	mu.RUnlock()
 
-	// Sprawdzenie aktywnych podatników
-	if activeHashes[hash] {
-		json.NewEncoder(w).Encode(Response{Response: "OK", Status: "ACTIVE"})
+	hashed := calculateHash(currentDataDate + nip)
+	// log.Printf("[INFO] Verifying NIP: %s, Hash: %s", nip, hashed)
+
+	mu.RLock()
+	_, isActive := activeHashes[hashed]
+	_, isExempt := exemptHashes[hashed]
+	mu.RUnlock()
+
+	if isActive {
+		json.NewEncoder(w).Encode(Response{Response: "OK", Status: "ACTIVE", Bank: "NA", Date: currentDataDate})
+		return
+	}
+	if isExempt {
+		json.NewEncoder(w).Encode(Response{Response: "OK", Status: "EXEMPT", Bank: "NA", Date: currentDataDate})
 		return
 	}
 
-	// Sprawdzenie podatników zwolnionych
-	if exemptHashes[hash] {
-		json.NewEncoder(w).Encode(Response{Response: "OK", Status: "EXEMPT"})
-		return
-	}
+	if bank != "" {
+		hashed = calculateHash(currentDataDate + nip + bank)
+		// log.Printf("[INFO] Verifying NIP: %s, Bank: %s, Hash: %s", nip, bank, hashed)
 
-	// Sprawdzenie rachunku wirtualnego (maski)
-	maskedAccounts := generateMaskedAccounts(accountNumber)
-	for _, masked := range maskedAccounts {
-		maskedInput := nip + masked
-		maskedHash := calculateHash(maskedInput)
-		if activeHashes[maskedHash] {
-			json.NewEncoder(w).Encode(Response{Response: "OK", Status: "ACTIVE"})
+		mu.RLock()
+		_, isActiveBank := activeHashes[hashed]
+		_, isExemptBank := exemptHashes[hashed]
+		mu.RUnlock()
+
+		if isActiveBank {
+			json.NewEncoder(w).Encode(Response{Response: "OK", Status: "ACTIVE", Bank: "MATCHED", Date: currentDataDate})
 			return
 		}
-		if exemptHashes[maskedHash] {
-			json.NewEncoder(w).Encode(Response{Response: "OK", Status: "EXEMPT"})
+		if isExemptBank {
+			json.NewEncoder(w).Encode(Response{Response: "OK", Status: "EXEMPT", Bank: "MATCHED", Date: currentDataDate})
 			return
+		}
+
+		for _, mask := range masks {
+			masked := applyMask(bank, mask)
+			maskedHash := calculateHash(currentDataDate + nip + masked)
+			// log.Printf("[INFO] Verifying NIP: %s, Bank: %s, Mask: %s, Masked: %s, Hash: %s", nip, bank, mask, masked, maskedHash)
+
+			mu.RLock()
+			_, isActiveMasked := activeHashes[maskedHash]
+			_, isExemptMasked := exemptHashes[maskedHash]
+			mu.RUnlock()
+
+			if isActiveMasked {
+				json.NewEncoder(w).Encode(Response{Response: "OK", Status: "ACTIVE", Bank: "MATCHED", Date: currentDataDate})
+				return
+			}
+			if isExemptMasked {
+				json.NewEncoder(w).Encode(Response{Response: "OK", Status: "EXEMPT", Bank: "MATCHED", Date: currentDataDate})
+				return
+			}
 		}
 	}
 
-	json.NewEncoder(w).Encode(Response{Response: "OK", Status: "NOTFOUND"})
+	json.NewEncoder(w).Encode(Response{Response: "OK", Status: "NOT_FOUND", Bank: "NOT_FOUND", Date: currentDataDate})
 }
 
-// Codzienna aktualizacja danych
+// 📌 Handle /health API endpoint
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(Response{Response: "OK", Message: "Service is running"})
+}
+
+// 📌 Periodic data update
 func updateData() {
 	for {
-		fmt.Println("Rozpoczęcie aktualizacji danych...")
-		if err := downloadFile(); err != nil {
-			fmt.Println("Błąd pobierania pliku:", err)
-			time.Sleep(24 * time.Hour)
+		log.Printf("[INFO] Starting data update...")
+		file, err := downloadFile()
+		if err != nil {
+			log.Printf("[ERROR] Download failed: %s", err)
+			time.Sleep(1 * time.Hour)
 			continue
 		}
 
-		if err := extractFile(); err != nil {
-			fmt.Println("Błąd rozpakowywania:", err)
-			time.Sleep(24 * time.Hour)
+		jsonFile, err := extractFile(file)
+		if err != nil {
+			log.Printf("[ERROR] Extraction failed: %s", err)
+			time.Sleep(1 * time.Hour)
 			continue
 		}
 
-		// Wczytanie hashy
-		var err error
-		activeHashes, err = loadHashes(activeFile)
-		if err != nil {
-			fmt.Println("Błąd ładowania hashy aktywnych:", err)
+		if err := loadData(jsonFile); err != nil {
+			log.Printf("[ERROR] Loading failed: %s", err)
+			time.Sleep(1 * time.Hour)
+			continue
 		}
 
-		exemptHashes, err = loadHashes(exemptFile)
-		if err != nil {
-			fmt.Println("Błąd ładowania hashy zwolnionych:", err)
-		}
+		_ = os.Remove(file)
+		_ = os.Remove(jsonFile)
 
-		// Wczytanie masek
-		masks, err = loadMasks()
-		if err != nil {
-			fmt.Println("Błąd ładowania masek:", err)
-		}
-
-		time.Sleep(24 * time.Hour) // Pobieranie codziennie
+		log.Printf("[INFO] Data update completed successfully.")
+		time.Sleep(24 * time.Hour)
 	}
+}
+
+// 📌 Handle Graceful Shutdown
+func handleShutdown() {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	<-stop
+	log.Printf("[INFO] Shutting down server...")
+	os.Exit(0)
 }
 
 func main() {
 	go updateData()
+	go handleShutdown()
 
 	http.HandleFunc("/verify", verifyHandler)
-	fmt.Println("Serwer HTTP działa na", serverAddress)
+	http.HandleFunc("/health", healthHandler)
+	log.Printf("[INFO] Server running at %s", serverAddress)
 	log.Fatal(http.ListenAndServe(serverAddress, nil))
 }

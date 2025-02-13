@@ -14,7 +14,7 @@ RUN go mod tidy
 COPY . .
 
 # Build the application
-RUN GOOS=linux GOARCH=amd64 go build -o firmguardpl
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o firmguardpl
 
 # Stage 2: Create a minimal runtime container
 FROM alpine:latest
