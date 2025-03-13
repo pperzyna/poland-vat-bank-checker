@@ -174,6 +174,10 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(Response{Response: "ERROR", Message: "Missing required parameters"})
 		return
 	}
+	if bank != "" && len(bank) != 26 {
+		json.NewEncoder(w).Encode(Response{Response: "ERROR", Message: "Invalid bank account number"})
+		return
+	}
 
 	mu.RLock()
 	currentDataDate := dataDate
