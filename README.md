@@ -74,7 +74,7 @@ GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.24+
 - `p7zip-full` (for extracting `.7z` files)
 - Docker (optional, for containerized deployment)
 
