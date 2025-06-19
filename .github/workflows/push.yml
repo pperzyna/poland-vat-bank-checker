@@ -3,7 +3,7 @@ name: Push
 on:
   push:
     branches:
-      - cicd
+      - main
 
 jobs:
   build-and-push:
