@@ -1,5 +1,9 @@
 # Poland VAT & Bank Checker
 
+```sh
+docker run -p 8080:8080 ghcr.io/pperzyna/poland-vat-bank-checker
+```
+
 ## Overview
 
 **pl-vatbank-checker** is a Go-based web service that verifies VAT taxpayers' NIP (Tax Identification Number) and bank account numbers using the official Polish Ministry of Finance [flat file](https://www.podatki.gov.pl/vat/bezpieczna-transakcja/wykaz-podatnikow-vat/plik-plaski/) data.
@@ -16,7 +20,7 @@ The service provides a REST API endpoint to check whether a given NIP and bank a
 
 ## API Endpoints
 
-### **Verify a NIP and Bank Account**
+### Verify a NIP and Bank Account
 
 #### Request
 
@@ -41,13 +45,23 @@ GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 **4. Taxpayer without bank:**
 
 ```json
-{ "response": "OK", "status": "ACTIVE or EXEMPT", "bank": "NA", "date": "20250101" }
+{
+  "response": "OK",
+  "status": "ACTIVE or EXEMPT",
+  "bank": "NA",
+  "date": "20250101"
+}
 ```
 
 **5. Not found in registry:**
 
 ```json
-{ "response": "OK", "status": "NOT_FOUND", "bank": "NOT_FOUND", "date": "20250101" }
+{
+  "response": "OK",
+  "status": "NOT_FOUND",
+  "bank": "NOT_FOUND",
+  "date": "20250101"
+}
 ```
 
 **6. Error response:**
@@ -58,13 +72,13 @@ GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 
 ## Installation & Setup
 
-### **Prerequisites**
+### Prerequisites
 
 - Go 1.23+
 - `p7zip-full` (for extracting `.7z` files)
 - Docker (optional, for containerized deployment)
 
-### **Local Setup**
+### Local Setup
 
 ```sh
 git clone https://github.com/pperzyna/poland-vat-bank-checker.git
@@ -77,7 +91,7 @@ go mod tidy
 go run main.go
 ```
 
-### **Docker Setup**
+### Docker Setup
 
 ```sh
 docker build -t pl-vatbank-checker .
@@ -94,7 +108,7 @@ docker run -p 8080:8080 pl-vatbank-checker
 
 ## Troubleshooting
 
-### **7-Zip Not Found Error**
+### 7-Zip Not Found Error
 
 If you get the error:
 
