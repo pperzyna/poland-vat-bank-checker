@@ -1,4 +1,4 @@
-module firmguardpl
+module pl-vatbank-checker
 
 go 1.23
 

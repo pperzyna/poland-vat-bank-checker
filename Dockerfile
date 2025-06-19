@@ -14,7 +14,7 @@ RUN go mod tidy
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o firmguardpl
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o pl-vatbank-checker
 
 # Stage 2: Create a minimal runtime container
 FROM alpine:latest
@@ -26,15 +26,13 @@ RUN apk add --no-cache p7zip
 WORKDIR /app
 
 # Copy the built binary from the builder stage
-COPY --from=builder /app/firmguardpl .
+COPY --from=builder /app/pl-vatbank-checker .
 
 # Ensure the binary is executable
-RUN chmod +x /app/firmguardpl 
+RUN chmod +x /app/pl-vatbank-checker 
 
 # Expose the application port
 EXPOSE 8080
 
 # Run the application
-# CMD ["./firmguardpl"]
-
-CMD ["/app/firmguardpl"]
+CMD ["/app/pl-vatbank-checker"]

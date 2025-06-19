@@ -1,31 +1,30 @@
-# FirmGuardPL
+# Poland VAT & Bank Checker
 
 ## Overview
 
-**FirmGuardPL** is a Go-based web service that verifies VAT taxpayers' NIP (Tax Identification Number) and bank account numbers using the official Polish Ministry of Finance flat file data.
+**pl-vatbank-checker** is a Go-based web service that verifies VAT taxpayers' NIP (Tax Identification Number) and bank account numbers using the official Polish Ministry of Finance [flat file](https://www.podatki.gov.pl/vat/bezpieczna-transakcja/wykaz-podatnikow-vat/plik-plaski/) data.
 
 The service provides a REST API endpoint to check whether a given NIP and bank account number exist in the registry as active, exempt, or not found.
 
 ## Features
 
 - ✅ Daily automatic download and extraction of the latest VAT taxpayer flat file
-- ✅ SHA-512 hashing for secure verification
-- ✅ Support for different virtual account masks
-- ✅ Optimized query performance
+- ✅ Support different bank account masks
+- ✅ Optimized query performance (but RAM consuming)
 - ✅ JSON API responses
-- ✅ Docker support for easy deployment
+- ✅ Container support for easy deployment
 
 ## API Endpoints
 
 ### **Verify a NIP and Bank Account**
 
-#### Request:
+#### Request
 
 ```sh
 GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 ```
 
-#### Response Examples:
+#### Response Examples
 
 **1. Active taxpayer:**
 
@@ -44,7 +43,6 @@ GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 ```json
 { "response": "OK", "status": "ACTIVE or EXEMPT", "bank": "NA", "date": "20250101" }
 ```
-
 
 **5. Not found in registry:**
 
@@ -69,8 +67,8 @@ GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 ### **Local Setup**
 
 ```sh
-git clone https://github.com/your-repo/firmguardpl.git
-cd firmguardpl
+git clone https://github.com/pperzyna/poland-vat-bank-checker.git
+cd poland-vat-bank-checker
 
 # Install dependencies
 go mod tidy
@@ -82,8 +80,8 @@ go run main.go
 ### **Docker Setup**
 
 ```sh
-docker build -t firmguardpl .
-docker run -p 8080:8080 firmguardpl
+docker build -t pl-vatbank-checker .
+docker run -p 8080:8080 pl-vatbank-checker
 ```
 
 ## How It Works
@@ -100,7 +98,7 @@ docker run -p 8080:8080 firmguardpl
 
 If you get the error:
 
-```
+```sh
 exec: "7z": executable file not found in $PATH
 ```
 
