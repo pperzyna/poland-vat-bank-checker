@@ -70,6 +70,12 @@ GET /verify?nip=<NIP>&bank=<BANK_ACCOUNT>
 { "response": "ERROR", "message": "Invalid parameters" }
 ```
 
+**7. Data not loaded yet** (HTTP 503, right after a start until the first flat file is downloaded and loaded):
+
+```json
+{ "response": "ERROR", "message": "Data not loaded yet" }
+```
+
 ## Installation & Setup
 
 ### Prerequisites

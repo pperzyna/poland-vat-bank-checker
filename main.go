@@ -181,7 +181,16 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	mu.RLock()
 	currentDataDate := dataDate
+	loaded := activeHashes != nil
 	mu.RUnlock()
+
+	// Until the first flat file is loaded every lookup would miss: say so
+	// instead of answering NOT_FOUND for everybody.
+	if !loaded {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(Response{Response: "ERROR", Message: "Data not loaded yet"})
+		return
+	}
 
 	hashed := calculateHash(currentDataDate + nip)
 	// log.Printf("[INFO] Verifying NIP: %s, Hash: %s", nip, hashed)
